@@ -48,7 +48,7 @@ Comprehensive architectural blueprints and system specifications are located in 
 ## 🏗️ Project Structure
 
 ```text
-beemar/
+beemart/
 ├── Backend/
 │   └── BeeMart.Api/             # ASP.NET Core 8 Web API (Business Logic, EF Core)
 │       ├── Controllers/         # Versioned API controllers (/api/v1/...)
