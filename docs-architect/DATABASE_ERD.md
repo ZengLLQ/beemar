@@ -48,7 +48,7 @@ erDiagram
 
     TrTransaction {
         NVARCHAR(36) IdTransaction PK "GUID string identifier"
-        NVARCHAR(20) InvoiceNo "Auto-generated invoice number"
+        NVARCHAR(20) InvoiceNo UK "Unique auto-generated invoice number"
         DATETIME2 TransactionDate "Transaction timestamp"
         NVARCHAR(5) IdUser FK "Cashier user reference"
         INT IdPaymentMethod FK "Payment method reference"
@@ -132,7 +132,7 @@ Records POS transaction headers.
 | Column | Type | Nullable | Description / Constraint |
 |---|---|---|---|
 | `IdTransaction` | `NVARCHAR(36)` | NO | Primary Key. GUID string. |
-| `InvoiceNo` | `NVARCHAR(20)` | NO | Standardized invoice number: `[IdUser][ddMMyy][running]`. |
+| `InvoiceNo` | `NVARCHAR(20)` | NO | Unique Constraint (UK). Standardized invoice number: `[IdUser][ddMMyy][running]`. |
 | `TransactionDate` | `DATETIME2` | NO | Date and time when transaction occurred. |
 | `IdUser` | `NVARCHAR(5)` | NO | Foreign Key -> `MsUser(IdUser)`. Cashier who handled it. |
 | `IdPaymentMethod` | `INT` | NO | Foreign Key -> `LtPaymentMethod(IdPaymentMethod)`. |

@@ -18,10 +18,6 @@
         <div id="realtimeClock" class="realtime-clock">
             Loading time...
         </div>
-        <div class="user-badge-header">
-            <span>👤</span>
-            <span id="headerRole">Kasir</span>: <strong id="headerUsername">-</strong>
-        </div>
         <button type="button" class="btn-logout" onclick="BeeMart.logout()">
             <span>🚪</span> Logout
         </button>
@@ -220,16 +216,14 @@
 <script>
     let currentUser = null;
     let currentSelectedProduct = null;
+    let currentSearchResults = [];
     let cart = [];
 
     document.addEventListener('DOMContentLoaded', async () => {
         currentUser = BeeMart.requireAuth();
         if (!currentUser) return;
 
-        // Header info
-        document.getElementById('headerUsername').textContent = currentUser.username;
         const roleLabel = currentUser.role === 'Admin' ? 'Admin' : 'Kasir';
-        document.getElementById('headerRole').textContent = roleLabel;
 
         // Start clock with format: "4/9/2026, 10:32:46 | Kasir: steven"
         BeeMart.startRealtimeClock('realtimeClock', `${roleLabel}: ${currentUser.username}`);
@@ -279,14 +273,14 @@
 
         const res = await BeeMart.fetchApi(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
         if (res.ok && res.data && res.data.success) {
-            const products = res.data.data;
-            if (products.length === 0) {
+            currentSearchResults = res.data.data;
+            if (currentSearchResults.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">Tidak ada barang yang cocok dengan pencarian "${query}".</td></tr>`;
                 return;
             }
 
             tbody.innerHTML = '';
-            products.forEach(p => {
+            currentSearchResults.forEach((p, idx) => {
                 const tr = document.createElement('tr');
                 const discBadge = p.discount > 0 ? `<span class="badge badge-discount">-${p.discount}%</span>` : `<span style="color: #94a3b8;">-</span>`;
                 const finalPrice = p.discount > 0 ? `<span style="text-decoration: line-through; font-size: 0.8rem; color: #94a3b8;">${BeeMart.formatRupiah(p.price)}</span><br/><strong>${BeeMart.formatRupiah(p.finalUnitPrice)}</strong>` : `<strong>${BeeMart.formatRupiah(p.price)}</strong>`;
@@ -298,7 +292,7 @@
                     <td>${finalPrice}</td>
                     <td>${discBadge}</td>
                     <td style="text-align: center;">
-                        <button type="button" class="btn btn-primary btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openProductModalByIndex(${idx})">
                             Pilih
                         </button>
                     </td>
@@ -307,6 +301,12 @@
             });
         } else {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 1.5rem; color: var(--danger);">Gagal memuat barang.</td></tr>`;
+        }
+    }
+
+    function openProductModalByIndex(idx) {
+        if (idx >= 0 && idx < currentSearchResults.length) {
+            openProductModal(currentSearchResults[idx]);
         }
     }
 
@@ -321,7 +321,17 @@
         qtyInput.value = 1;
         qtyInput.max = product.stock;
 
-        document.getElementById('modalStockError').style.display = 'none';
+        const errorBox = document.getElementById('modalStockError');
+        const btnAdd = document.getElementById('btnAddToCart');
+
+        if (product.stock <= 0) {
+            errorBox.textContent = 'Jumlah barang yang dimasukkan melebihi sisa stok.';
+            errorBox.style.display = 'flex';
+            btnAdd.disabled = true;
+        } else {
+            errorBox.style.display = 'none';
+            btnAdd.disabled = false;
+        }
 
         const modal = document.getElementById('productModal');
         modal.classList.add('show');
@@ -336,37 +346,41 @@
 
     function validateModalQty() {
         if (!currentSelectedProduct) return false;
-        const qty = parseInt(document.getElementById('modalProductQty').value, 10) || 0;
+        const qtyVal = document.getElementById('modalProductQty').value;
+        const qty = parseInt(qtyVal, 10);
         const errorBox = document.getElementById('modalStockError');
+        const btnAdd = document.getElementById('btnAddToCart');
 
-        // Check if item already in cart to check total requested qty
         const existingInCart = cart.find(c => c.idProduct === currentSelectedProduct.idProduct);
         const alreadyInCartQty = existingInCart ? existingInCart.qty : 0;
-        const totalRequested = qty + alreadyInCartQty;
+        const totalRequested = (isNaN(qty) ? 0 : qty) + alreadyInCartQty;
+
+        if (isNaN(qty) || qty <= 0) {
+            errorBox.textContent = 'Jumlah barang harus lebih dari 0.';
+            errorBox.style.display = 'flex';
+            btnAdd.disabled = true;
+            return false;
+        }
 
         if (qty > currentSelectedProduct.stock || totalRequested > currentSelectedProduct.stock) {
             errorBox.textContent = 'Jumlah barang yang dimasukkan melebihi sisa stok.';
             errorBox.style.display = 'flex';
+            btnAdd.disabled = true;
             return false;
-        } else {
-            errorBox.style.display = 'none';
-            return true;
         }
+
+        errorBox.style.display = 'none';
+        btnAdd.disabled = false;
+        return true;
     }
 
     function addToCartFromModal() {
         if (!currentSelectedProduct) return;
+        if (!validateModalQty()) {
+            return;
+        }
+
         const qty = parseInt(document.getElementById('modalProductQty').value, 10);
-        if (!qty || qty <= 0) {
-            BeeMart.showToast('Masukkan jumlah qty yang valid.', 'warning');
-            return;
-        }
-
-        const isValid = validateModalQty();
-        if (!isValid) {
-            return;
-        }
-
         const existingIndex = cart.findIndex(c => c.idProduct === currentSelectedProduct.idProduct);
         if (existingIndex >= 0) {
             cart[existingIndex].qty += qty;

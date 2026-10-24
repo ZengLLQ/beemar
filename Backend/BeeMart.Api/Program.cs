@@ -54,7 +54,22 @@ builder.Services.AddCors(options =>
 });
 
 // 4. Add Controllers
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var action = context.ActionDescriptor.DisplayName ?? "";
+            if (action.Contains("Login", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                    BeeMart.Api.DTOs.ApiResponse<BeeMart.Api.DTOs.LoginResponse>.Fail("Invalid login"));
+            }
+            var errors = context.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage).ToList();
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                BeeMart.Api.DTOs.ApiResponse<object>.Fail(errors.FirstOrDefault() ?? "Validasi gagal.", errors));
+        };
+    });
 
 // 5. Configure Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();

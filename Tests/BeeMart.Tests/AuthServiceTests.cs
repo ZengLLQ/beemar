@@ -95,6 +95,25 @@ public class AuthServiceTests : IDisposable
         Assert.Equal("Invalid login", res.Message);
     }
 
+    [Theory]
+    [InlineData("", "password", "Cashier")]
+    [InlineData("steven", "", "Cashier")]
+    [InlineData("   ", "   ", "Cashier")]
+    public async Task Login_EmptyCredentials_ReturnsInvalidLogin(string username, string password, string role)
+    {
+        var req = new LoginRequest
+        {
+            Username = username,
+            Password = password,
+            Role = role
+        };
+
+        var res = await _authService.LoginAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Equal("Invalid login", res.Message);
+    }
+
     [Fact]
     public async Task Register_ExistingUsername_ReturnsUsernameHasAlreadyExists()
     {

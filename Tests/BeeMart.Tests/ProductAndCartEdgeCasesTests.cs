@@ -37,7 +37,8 @@ public class ProductAndCartEdgeCasesTests : IDisposable
             new MsProduct { IdProduct = "p1", Name = "Apel Manis", Weight = 1.0m, Stock = 5, Price = 10000, Stsrc = true },
             new MsProduct { IdProduct = "p2", Name = "Apel Asam", Weight = 1.0m, Stock = 8, Price = 12000, Stsrc = true },
             new MsProduct { IdProduct = "p3", Name = "Susu Sapi", Weight = 1.0m, Stock = 12, Price = 15000, Stsrc = true },
-            new MsProduct { IdProduct = "p4", Name = "Apel Inactive", Weight = 1.0m, Stock = 20, Price = 8000, Stsrc = false } // Inactive
+            new MsProduct { IdProduct = "p4", Name = "Apel Inactive", Weight = 1.0m, Stock = 20, Price = 8000, Stsrc = false }, // Inactive
+            new MsProduct { IdProduct = "p5", Name = "Lay's Barbecue Chips", Weight = 0.05m, Stock = 25, Price = 11000, Stsrc = true } // Apostrophe
         );
 
         _context.Users.Add(new MsUser
@@ -68,6 +69,15 @@ public class ProductAndCartEdgeCasesTests : IDisposable
         // Should return "Apel Manis" and "Apel Asam", but NOT "Apel Inactive"
         Assert.Equal(2, results.Count);
         Assert.DoesNotContain(results, p => p.Name == "Apel Inactive");
+    }
+
+    [Fact]
+    public async Task SearchProducts_HandlesSpecialCharactersAndApostrophe()
+    {
+        var results = await _productService.SearchProductsAsync("Lay's");
+
+        Assert.Single(results);
+        Assert.Equal("Lay's Barbecue Chips", results[0].Name);
     }
 
     [Fact]

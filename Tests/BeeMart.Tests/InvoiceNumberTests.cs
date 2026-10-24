@@ -108,6 +108,30 @@ public class InvoiceNumberTests : IDisposable
         Assert.Equal("00123040926001", invoiceNo);
     }
 
+    [Fact]
+    public async Task GenerateNextInvoiceNo_MaxRunningNumber999_RollsOverSafely()
+    {
+        var userId = "76985";
+        var date = new DateTime(2026, 9, 4, 10, 0, 0, DateTimeKind.Utc);
+
+        _context.Transactions.Add(new TrTransaction
+        {
+            IdTransaction = Guid.NewGuid().ToString(),
+            InvoiceNo = "76985040926999",
+            IdUser = userId,
+            IdPaymentMethod = 1,
+            TotalPrice = 50000,
+            TransactionDate = date
+        });
+        await _context.SaveChangesAsync();
+
+        var invoiceNo = await _transactionService.GenerateNextInvoiceNoAsync(userId, date);
+
+        // Should roll over to 001 and maintain exact 14 digits format
+        Assert.Equal("76985040926001", invoiceNo);
+        Assert.Equal(14, invoiceNo.Length);
+    }
+
     public void Dispose()
     {
         _context.Dispose();

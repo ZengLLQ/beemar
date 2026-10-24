@@ -120,7 +120,7 @@ Execute the automated test suite:
 dotnet test
 ```
 
-All 20 unit and integration tests will execute and verify invoice generation, stock constraints, role filtering, and error handling.
+All 28 unit and integration tests will execute and verify invoice generation, concurrency synchronization, stock constraints, role filtering, and error handling.
 
 ---
 

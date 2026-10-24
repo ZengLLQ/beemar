@@ -162,5 +162,5 @@ $$\text{InvoiceNo} = [\text{5-digit UserID}][\text{ddMMyy}][\text{3-digit Runnin
 
 - **5-digit UserID**: Guaranteed 5 numeric digits (e.g., `76985`), zero-padded if necessary.
 - **ddMMyy**: 6 digits representing transaction local date (e.g., `040926` for 4 September 2026).
-- **3-digit Running Number**: Formatted as `D3` starting from `001` up to `999` per user per day.
-- **Concurrency & Idempotency**: Evaluated using atomic database checks for existing invoices with matching prefix.
+- **3-digit Running Number**: Formatted as `D3` starting from `001` up to `999` per user per day (with safe rollover).
+- **Concurrency & Idempotency**: Serialized via `SemaphoreSlim(1, 1)` thread synchronization and enforced by a database UNIQUE constraint on `InvoiceNo`, ensuring sequential generation and preventing race collisions under concurrent traffic.

@@ -81,6 +81,7 @@ CREATE TABLE dbo.TrTransaction (
     Dateup DATETIME2 NULL,
     Userup NVARCHAR(36) NULL,
     CONSTRAINT PK_TrTransaction PRIMARY KEY (IdTransaction),
+    CONSTRAINT UQ_TrTransaction_InvoiceNo UNIQUE (InvoiceNo),
     CONSTRAINT FK_TrTransaction_MsUser FOREIGN KEY (IdUser) REFERENCES dbo.MsUser(IdUser),
     CONSTRAINT FK_TrTransaction_LtPaymentMethod FOREIGN KEY (IdPaymentMethod) REFERENCES dbo.LtPaymentMethod(IdPaymentMethod)
 );
@@ -101,14 +102,9 @@ CREATE TABLE dbo.TrTransactionDetail (
     Dateup DATETIME2 NULL,
     Userup NVARCHAR(36) NULL,
     CONSTRAINT PK_TrTransactionDetail PRIMARY KEY (IdTransactionDetail),
-    CONSTRAINT FK_TrTransactionDetail_TrTransaction FOREIGN KEY (IdTransactionDetail_TrTransaction) REFERENCES dbo.TrTransaction(IdTransaction),
+    CONSTRAINT FK_TrTransactionDetail_TrTransaction FOREIGN KEY (IdTransaction) REFERENCES dbo.TrTransaction(IdTransaction),
     CONSTRAINT FK_TrTransactionDetail_MsProduct FOREIGN KEY (IdProduct) REFERENCES dbo.MsProduct(IdProduct)
 );
-GO
-
--- Fix constraint name typo in FK definition if needed
-ALTER TABLE dbo.TrTransactionDetail DROP CONSTRAINT FK_TrTransactionDetail_TrTransaction;
-ALTER TABLE dbo.TrTransactionDetail ADD CONSTRAINT FK_TrTransactionDetail_TrTransaction FOREIGN KEY (IdTransaction) REFERENCES dbo.TrTransaction(IdTransaction);
 GO
 
 -- =====================================================================
@@ -155,15 +151,19 @@ VALUES
 ('11111111-1111-1111-1111-111111111112', 'Mie Instan Goreng Spesial', 0.08, 250, 3500.00, 0.00, 1, SYSUTCDATETIME(), 'SYSTEM');
 GO
 
--- Sample Initial Transaction for Testing
+-- Sample Initial Transactions for Testing (including exact PDF example 76985040926001)
 INSERT INTO dbo.TrTransaction (IdTransaction, InvoiceNo, TransactionDate, IdUser, IdPaymentMethod, TotalPrice, Stsrc, Datein, Userin)
 VALUES 
+('22222222-2222-2222-2222-222222222200', '76985040926001', '2026-09-04 10:32:46', '76985', 1, 89000.00, 1, '2026-09-04 10:32:46', '76985'),
 ('22222222-2222-2222-2222-222222222201', '76985090426001', '2026-04-09 10:15:30', '76985', 1, 89000.00, 1, '2026-04-09 10:15:30', '76985'),
 ('22222222-2222-2222-2222-222222222202', '66859090426001', '2026-04-09 11:45:10', '66859', 2, 78000.00, 1, '2026-04-09 11:45:10', '66859');
 GO
 
 INSERT INTO dbo.TrTransactionDetail (IdTransactionDetail, IdTransaction, IdProduct, Qty, Price, Discount, SubTotal, Stsrc, Datein, Userin)
 VALUES 
+('33333333-3333-3333-3333-333333333300', '22222222-2222-2222-2222-222222222200', '11111111-1111-1111-1111-111111111101', 1, 45000.00, 5.00, 42750.00, 1, '2026-09-04 10:32:46', '76985'),
+('33333333-3333-3333-3333-333333333305', '22222222-2222-2222-2222-222222222200', '11111111-1111-1111-1111-111111111103', 2, 21500.00, 10.00, 38700.00, 1, '2026-09-04 10:32:46', '76985'),
+('33333333-3333-3333-3333-333333333306', '22222222-2222-2222-2222-222222222200', '11111111-1111-1111-1111-111111111111', 1, 8500.00, 0.00, 8500.00, 1, '2026-09-04 10:32:46', '76985'),
 ('33333333-3333-3333-3333-333333333301', '22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111101', 1, 45000.00, 5.00, 42750.00, 1, '2026-04-09 10:15:30', '76985'),
 ('33333333-3333-3333-3333-333333333302', '22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111103', 2, 21500.00, 10.00, 38700.00, 1, '2026-04-09 10:15:30', '76985'),
 ('33333333-3333-3333-3333-333333333303', '22222222-2222-2222-2222-222222222201', '11111111-1111-1111-1111-111111111111', 1, 8500.00, 0.00, 8500.00, 1, '2026-04-09 10:15:30', '76985'),

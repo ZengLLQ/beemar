@@ -246,8 +246,21 @@ public static class DbInitializer
         }
 
         // 4. Seed initial transactions for history testing if empty
-        if (!await context.Transactions.AnyAsync())
+        if (!await context.Transactions.AnyAsync(t => t.InvoiceNo == "76985040926001"))
         {
+            var t0 = new TrTransaction
+            {
+                IdTransaction = "22222222-2222-2222-2222-222222222200",
+                InvoiceNo = "76985040926001",
+                TransactionDate = new DateTime(2026, 9, 4, 10, 32, 46, DateTimeKind.Utc),
+                IdUser = "76985",
+                IdPaymentMethod = 1, // Cash
+                TotalPrice = 89000.00m,
+                Stsrc = true,
+                Datein = new DateTime(2026, 9, 4, 10, 32, 46, DateTimeKind.Utc),
+                Userin = "76985"
+            };
+
             var t1 = new TrTransaction
             {
                 IdTransaction = "22222222-2222-2222-2222-222222222201",
@@ -330,8 +343,66 @@ public static class DbInitializer
                 Userin = "66859"
             };
 
-            await context.Transactions.AddRangeAsync(t1, t2);
-            await context.TransactionDetails.AddRangeAsync(td1, td2, td3, td4);
+            if (!await context.Transactions.AnyAsync(t => t.IdTransaction == t0.IdTransaction))
+            {
+                var td0a = new TrTransactionDetail
+                {
+                    IdTransactionDetail = "33333333-3333-3333-3333-333333333300",
+                    IdTransaction = t0.IdTransaction,
+                    IdProduct = "11111111-1111-1111-1111-111111111101",
+                    Qty = 1,
+                    Price = 45000.00m,
+                    Discount = 5.00m,
+                    SubTotal = 42750.00m,
+                    Stsrc = true,
+                    Datein = t0.TransactionDate,
+                    Userin = "76985"
+                };
+
+                var td0b = new TrTransactionDetail
+                {
+                    IdTransactionDetail = "33333333-3333-3333-3333-333333333305",
+                    IdTransaction = t0.IdTransaction,
+                    IdProduct = "11111111-1111-1111-1111-111111111103",
+                    Qty = 2,
+                    Price = 21500.00m,
+                    Discount = 10.00m,
+                    SubTotal = 38700.00m,
+                    Stsrc = true,
+                    Datein = t0.TransactionDate,
+                    Userin = "76985"
+                };
+
+                var td0c = new TrTransactionDetail
+                {
+                    IdTransactionDetail = "33333333-3333-3333-3333-333333333306",
+                    IdTransaction = t0.IdTransaction,
+                    IdProduct = "11111111-1111-1111-1111-111111111111",
+                    Qty = 1,
+                    Price = 8500.00m,
+                    Discount = 0.00m,
+                    SubTotal = 8500.00m,
+                    Stsrc = true,
+                    Datein = t0.TransactionDate,
+                    Userin = "76985"
+                };
+
+                await context.Transactions.AddAsync(t0);
+                await context.TransactionDetails.AddRangeAsync(td0a, td0b, td0c);
+            }
+
+            if (!await context.Transactions.AnyAsync(t => t.IdTransaction == t1.IdTransaction))
+            {
+                await context.Transactions.AddAsync(t1);
+                await context.TransactionDetails.AddRangeAsync(td1, td2, td3);
+            }
+
+            if (!await context.Transactions.AnyAsync(t => t.IdTransaction == t2.IdTransaction))
+            {
+                await context.Transactions.AddAsync(t2);
+                await context.TransactionDetails.AddAsync(td4);
+            }
+
             await context.SaveChangesAsync();
         }
     }

@@ -45,6 +45,7 @@ public class BeeMartDbContext : DbContext
         modelBuilder.Entity<TrTransaction>(entity =>
         {
             entity.HasKey(e => e.IdTransaction);
+            entity.HasIndex(e => e.InvoiceNo).IsUnique();
             entity.Property(e => e.TotalPrice).HasPrecision(18, 2);
 
             entity.HasOne(e => e.User)

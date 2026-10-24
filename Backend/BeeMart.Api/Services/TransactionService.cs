@@ -23,9 +23,36 @@ public class TransactionService : ITransactionService
         _logger = logger;
     }
 
+    private static readonly SemaphoreSlim _transactionLock = new(1, 1);
+    private static readonly TimeZoneInfo _wibTimeZone = InitWibTimeZone();
+
+    private static TimeZoneInfo InitWibTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+        }
+        catch
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById("Asia/Jakarta");
+            }
+            catch
+            {
+                return TimeZoneInfo.CreateCustomTimeZone("WIB", TimeSpan.FromHours(7), "WIB", "WIB");
+            }
+        }
+    }
+
+    public static DateTime GetIndonesiaTime()
+    {
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _wibTimeZone);
+    }
+
     public async Task<string> GenerateNextInvoiceNoAsync(string userId, DateTime? targetDate = null)
     {
-        var date = targetDate ?? DateTime.UtcNow;
+        var date = targetDate ?? GetIndonesiaTime();
         var formattedUserId = (userId ?? "").Trim().PadLeft(5, '0');
         if (formattedUserId.Length > 5)
         {
@@ -55,7 +82,7 @@ public class TransactionService : ITransactionService
             }
         }
 
-        int nextRunning = maxRunning + 1;
+        int nextRunning = (maxRunning % 999) + 1;
         var runningPart = nextRunning.ToString("D3");
 
         return $"{prefix}{runningPart}";
@@ -73,126 +100,143 @@ public class TransactionService : ITransactionService
             return ApiResponse<TransactionResponse>.Fail("Keranjang belanja tidak boleh kosong.");
         }
 
-        // Validate User
-        var user = await _context.Users
-            .FirstOrDefaultAsync(u => u.IdUser == request.IdUser && u.Stsrc);
-        if (user == null)
+        await _transactionLock.WaitAsync();
+        try
         {
-            return ApiResponse<TransactionResponse>.Fail("User kasir tidak ditemukan atau tidak aktif.");
-        }
-
-        // Validate Payment Method
-        var paymentMethod = await _context.PaymentMethods
-            .FirstOrDefaultAsync(p => p.IdPaymentMethod == request.IdPaymentMethod && p.Stsrc);
-        if (paymentMethod == null)
-        {
-            return ApiResponse<TransactionResponse>.Fail("Metode pembayaran tidak valid.");
-        }
-
-        // Validate products & stock
-        var productIds = request.Items.Select(i => i.IdProduct).Distinct().ToList();
-        var products = await _context.Products
-            .Where(p => productIds.Contains(p.IdProduct) && p.Stsrc)
-            .ToDictionaryAsync(p => p.IdProduct);
-
-        foreach (var item in request.Items)
-        {
-            if (!products.TryGetValue(item.IdProduct, out var product))
+            // Validate User
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.IdUser == request.IdUser && u.Stsrc);
+            if (user == null)
             {
-                return ApiResponse<TransactionResponse>.Fail($"Produk tidak ditemukan.");
+                return ApiResponse<TransactionResponse>.Fail("User kasir tidak ditemukan atau tidak aktif.");
             }
 
-            if (item.Qty <= 0)
+            // Validate Payment Method
+            var paymentMethod = await _context.PaymentMethods
+                .FirstOrDefaultAsync(p => p.IdPaymentMethod == request.IdPaymentMethod && p.Stsrc);
+            if (paymentMethod == null)
             {
-                return ApiResponse<TransactionResponse>.Fail("Jumlah barang harus lebih dari 0.");
+                return ApiResponse<TransactionResponse>.Fail("Metode pembayaran tidak valid.");
             }
 
-            // PDF Requirement: "Jumlah barang yang dimasukkan melebihi sisa stok."
-            if (item.Qty > product.Stock)
+            // Validate individual item quantities
+            foreach (var item in request.Items)
             {
-                return ApiResponse<TransactionResponse>.Fail("Jumlah barang yang dimasukkan melebihi sisa stok.");
+                if (item.Qty <= 0)
+                {
+                    return ApiResponse<TransactionResponse>.Fail("Jumlah barang harus lebih dari 0.");
+                }
             }
-        }
 
-        // Generate Invoice Number
-        var invoiceNo = await GenerateNextInvoiceNoAsync(user.IdUser, DateTime.UtcNow);
+            // Validate products & stock (grouping by IdProduct to catch duplicate items in payload)
+            var productIds = request.Items.Select(i => i.IdProduct).Distinct().ToList();
+            var products = await _context.Products
+                .Where(p => productIds.Contains(p.IdProduct) && p.Stsrc)
+                .ToDictionaryAsync(p => p.IdProduct);
 
-        var transaction = new TrTransaction
-        {
-            IdTransaction = Guid.NewGuid().ToString(),
-            InvoiceNo = invoiceNo,
-            TransactionDate = DateTime.UtcNow,
-            IdUser = user.IdUser,
-            IdPaymentMethod = paymentMethod.IdPaymentMethod,
-            TotalPrice = 0,
-            Stsrc = true,
-            Datein = DateTime.UtcNow,
-            Userin = user.IdUser
-        };
+            var requestedTotalsByProduct = request.Items
+                .GroupBy(i => i.IdProduct)
+                .ToDictionary(g => g.Key, g => g.Sum(i => i.Qty));
 
-        decimal totalPrice = 0;
-        var detailResponses = new List<TransactionDetailItemResponse>();
-
-        foreach (var item in request.Items)
-        {
-            var product = products[item.IdProduct];
-
-            // Deduct stock
-            product.Stock -= item.Qty;
-            product.Dateup = DateTime.UtcNow;
-            product.Userup = user.IdUser;
-
-            var discountedUnitPrice = product.Price - (product.Price * (product.Discount / 100m));
-            var subTotal = Math.Round(discountedUnitPrice * item.Qty, 2);
-            totalPrice += subTotal;
-
-            var detail = new TrTransactionDetail
+            foreach (var (productId, totalRequested) in requestedTotalsByProduct)
             {
-                IdTransactionDetail = Guid.NewGuid().ToString(),
-                IdTransaction = transaction.IdTransaction,
-                IdProduct = product.IdProduct,
-                Qty = item.Qty,
-                Price = product.Price,
-                Discount = product.Discount,
-                SubTotal = subTotal,
+                if (!products.TryGetValue(productId, out var product))
+                {
+                    return ApiResponse<TransactionResponse>.Fail("Produk tidak ditemukan.");
+                }
+
+                // PDF Requirement: "Jumlah barang yang dimasukkan melebihi sisa stok."
+                if (totalRequested > product.Stock)
+                {
+                    return ApiResponse<TransactionResponse>.Fail("Jumlah barang yang dimasukkan melebihi sisa stok.");
+                }
+            }
+
+            // Generate Invoice Number with Indonesian local time
+            var transactionDate = GetIndonesiaTime();
+            var invoiceNo = await GenerateNextInvoiceNoAsync(user.IdUser, transactionDate);
+
+            var transaction = new TrTransaction
+            {
+                IdTransaction = Guid.NewGuid().ToString(),
+                InvoiceNo = invoiceNo,
+                TransactionDate = transactionDate,
+                IdUser = user.IdUser,
+                IdPaymentMethod = paymentMethod.IdPaymentMethod,
+                TotalPrice = 0,
                 Stsrc = true,
-                Datein = DateTime.UtcNow,
+                Datein = transactionDate,
                 Userin = user.IdUser
             };
 
-            transaction.TransactionDetails.Add(detail);
+            decimal totalPrice = 0;
+            var detailResponses = new List<TransactionDetailItemResponse>();
 
-            detailResponses.Add(new TransactionDetailItemResponse
+            foreach (var item in request.Items)
             {
-                IdTransactionDetail = detail.IdTransactionDetail,
-                IdProduct = product.IdProduct,
-                ProductName = product.Name,
-                Qty = item.Qty,
-                Price = product.Price,
-                Discount = product.Discount,
-                SubTotal = subTotal
-            });
+                var product = products[item.IdProduct];
+
+                // Deduct stock
+                product.Stock -= item.Qty;
+                product.Dateup = transactionDate;
+                product.Userup = user.IdUser;
+
+                var discountedUnitPrice = product.Price - (product.Price * (product.Discount / 100m));
+                var subTotal = Math.Round(discountedUnitPrice * item.Qty, 2);
+                totalPrice += subTotal;
+
+                var detail = new TrTransactionDetail
+                {
+                    IdTransactionDetail = Guid.NewGuid().ToString(),
+                    IdTransaction = transaction.IdTransaction,
+                    IdProduct = product.IdProduct,
+                    Qty = item.Qty,
+                    Price = product.Price,
+                    Discount = product.Discount,
+                    SubTotal = subTotal,
+                    Stsrc = true,
+                    Datein = transactionDate,
+                    Userin = user.IdUser
+                };
+
+                transaction.TransactionDetails.Add(detail);
+
+                detailResponses.Add(new TransactionDetailItemResponse
+                {
+                    IdTransactionDetail = detail.IdTransactionDetail,
+                    IdProduct = product.IdProduct,
+                    ProductName = product.Name,
+                    Qty = item.Qty,
+                    Price = product.Price,
+                    Discount = product.Discount,
+                    SubTotal = subTotal
+                });
+            }
+
+            transaction.TotalPrice = Math.Round(totalPrice, 2);
+
+            await _context.Transactions.AddAsync(transaction);
+            await _context.SaveChangesAsync();
+
+            var response = new TransactionResponse
+            {
+                IdTransaction = transaction.IdTransaction,
+                InvoiceNo = transaction.InvoiceNo,
+                TransactionDate = transaction.TransactionDate,
+                IdUser = user.IdUser,
+                CashierName = user.Username,
+                IdPaymentMethod = paymentMethod.IdPaymentMethod,
+                PaymentMethodName = paymentMethod.MethodName,
+                TotalPrice = transaction.TotalPrice,
+                Items = detailResponses
+            };
+
+            return ApiResponse<TransactionResponse>.Ok(response, "Transaksi berhasil diproses.");
         }
-
-        transaction.TotalPrice = Math.Round(totalPrice, 2);
-
-        await _context.Transactions.AddAsync(transaction);
-        await _context.SaveChangesAsync();
-
-        var response = new TransactionResponse
+        finally
         {
-            IdTransaction = transaction.IdTransaction,
-            InvoiceNo = transaction.InvoiceNo,
-            TransactionDate = transaction.TransactionDate,
-            IdUser = user.IdUser,
-            CashierName = user.Username,
-            IdPaymentMethod = paymentMethod.IdPaymentMethod,
-            PaymentMethodName = paymentMethod.MethodName,
-            TotalPrice = transaction.TotalPrice,
-            Items = detailResponses
-        };
-
-        return ApiResponse<TransactionResponse>.Ok(response, "Transaksi berhasil diproses.");
+            _transactionLock.Release();
+        }
     }
 
     public async Task<PaginatedResponse<TransactionHistoryItemDto>> GetHistoryAsync(
