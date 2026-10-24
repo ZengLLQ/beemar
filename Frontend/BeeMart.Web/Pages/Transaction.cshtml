@@ -1,0 +1,520 @@
+@page "/Transaction"
+@model BeeMart.Web.Pages.TransactionModel
+@{
+    ViewData["Title"] = "New Transaction";
+}
+
+<!-- Top Header with Realtime Clock & User Info -->
+<header class="top-header">
+    <div class="brand-section">
+        <span class="brand-logo">🐝</span>
+        <div>
+            <span class="brand-name">BeeMart</span>
+            <span class="brand-tag">POS SYSTEM</span>
+        </div>
+    </div>
+
+    <div class="header-status">
+        <div id="realtimeClock" class="realtime-clock">
+            Loading time...
+        </div>
+        <div class="user-badge-header">
+            <span>👤</span>
+            <span id="headerRole">Kasir</span>: <strong id="headerUsername">-</strong>
+        </div>
+        <button type="button" class="btn-logout" onclick="BeeMart.logout()">
+            <span>🚪</span> Logout
+        </button>
+    </div>
+</header>
+
+<!-- Navigation Tabs -->
+<nav class="nav-tabs-bar">
+    <a href="/Transaction" class="nav-tab-btn active">
+        <span>🛒</span> New Transaction
+    </a>
+    <a href="/History" class="nav-tab-btn">
+        <span>📜</span> History Transaction
+    </a>
+</nav>
+
+<!-- Main POS Content -->
+<main class="main-wrapper">
+    <div class="pos-layout">
+        
+        <!-- Left Column: Search & Product Selection -->
+        <div class="pos-left">
+            <!-- Transaction Invoice Bar -->
+            <div class="card" style="padding: 1rem 1.25rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <label for="invoiceNo" class="form-label" style="margin: 0; white-space: nowrap;">No. Invoice:</label>
+                        <input type="text" id="invoiceNo" class="form-control" style="font-weight: 700; width: 220px; font-family: monospace; letter-spacing: 1px;" readonly />
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                        Status: <span class="badge badge-success">Siap Transaksi</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Products Card -->
+            <div class="card">
+                <div class="card-header-styled">
+                    <h2 class="card-title"><span>🔍</span> Pencarian Barang</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Maksimal 10 hasil</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="searchProductInput">Cari Nama Barang</label>
+                    <div class="search-box-row">
+                        <input type="text" 
+                               id="searchProductInput" 
+                               class="form-control" 
+                               placeholder="Cari Barang (Ketik: Apel / Susu, lalu tekan Enter)" 
+                               onkeydown="if(event.key === 'Enter'){ event.preventDefault(); executeProductSearch(); }" />
+                        <button type="button" class="btn btn-primary" onclick="executeProductSearch()">
+                            Cari
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Products Result Table -->
+                <div class="table-responsive" style="margin-top: 1rem;">
+                    <table class="custom-table" id="productsTable">
+                        <thead>
+                            <tr>
+                                <th>Nama Barang</th>
+                                <th>Berat</th>
+                                <th>Stock</th>
+                                <th>Harga</th>
+                                <th>Diskon</th>
+                                <th style="text-align: center;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                    Ketik nama barang pada kolom di atas lalu tekan Enter untuk mencari.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Cart & Checkout -->
+        <div class="pos-right">
+            <div class="card" style="height: calc(100% - 1.5rem); display: flex; flex-direction: column;">
+                <div class="card-header-styled">
+                    <h2 class="card-title"><span>🛍️</span> Daftar Belanjaan</h2>
+                    <span id="cartCountBadge" class="badge badge-stock">0 Item</span>
+                </div>
+
+                <!-- Cart Table -->
+                <div class="table-responsive" style="flex: 1; max-height: 380px; overflow-y: auto;">
+                    <table class="custom-table" id="cartTable">
+                        <thead>
+                            <tr>
+                                <th>Nama Barang</th>
+                                <th>Harga</th>
+                                <th>Diskon</th>
+                                <th>Qty</th>
+                                <th>Subtotal</th>
+                                <th style="text-align: center;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cartTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                    Belum ada barang di keranjang belanja.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Summary & Payment -->
+                <div class="cart-summary-box">
+                    <div class="summary-row">
+                        <span>Jumlah Total Item:</span>
+                        <strong id="summaryTotalItems">0</strong>
+                    </div>
+                    <div class="summary-row total-row">
+                        <span>Total:</span>
+                        <span id="summaryTotalPrice" class="total-amount">Rp 0</span>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label class="form-label" for="paymentMethodSelect">Metode Pembayaran</label>
+                        <select id="paymentMethodSelect" class="form-control" required>
+                            <option value="">-- Pilih Metode Pembayaran --</option>
+                        </select>
+                    </div>
+
+                    <button type="button" id="btnSubmitTransaction" class="btn btn-success btn-block" style="padding: 0.85rem; font-size: 1rem; margin-top: 0.75rem;" onclick="submitTransaction()">
+                        <span>💳</span> Submit Transaksi
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<!-- Modal Dialog "Barang Terpilih" -->
+<div id="productModal" class="modal-backdrop">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 class="modal-title"><span>📦</span> Barang Terpilih</h3>
+            <button type="button" class="btn-close-modal" onclick="closeProductModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="modalStockError" class="alert alert-danger" style="display: none;">
+                Jumlah barang yang dimasukkan melebihi sisa stok.
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label class="form-label">Nama Barang</label>
+                <div id="modalProductName" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main);"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.25rem;">
+                <div>
+                    <label class="form-label">Harga Satuan</label>
+                    <div id="modalProductPrice" style="font-weight: 600; color: #059669; font-size: 1.05rem;"></div>
+                    <div id="modalProductDiscount" style="font-size: 0.8rem; color: #b91c1c;"></div>
+                </div>
+                <div>
+                    <label class="form-label">Sisa Stock</label>
+                    <div id="modalProductStock" style="font-weight: 700; font-size: 1.05rem; color: #0369a1;"></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="modalProductQty">Input Qty</label>
+                <input type="number" 
+                       id="modalProductQty" 
+                       class="form-control" 
+                       value="1" 
+                       min="1" 
+                       style="font-size: 1.1rem; font-weight: 700;"
+                       oninput="validateModalQty()"
+                       onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addToCartFromModal(); }" />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeProductModal()">Batal</button>
+            <button type="button" id="btnAddToCart" class="btn btn-primary" onclick="addToCartFromModal()">
+                Masukkan ke Keranjang
+            </button>
+        </div>
+    </div>
+</div>
+
+<footer class="app-footer">
+    &copy; 2026 BeeMart Point of Sale - IT Division Bootcamp
+</footer>
+
+@section Scripts {
+<script>
+    let currentUser = null;
+    let currentSelectedProduct = null;
+    let cart = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        currentUser = BeeMart.requireAuth();
+        if (!currentUser) return;
+
+        // Header info
+        document.getElementById('headerUsername').textContent = currentUser.username;
+        const roleLabel = currentUser.role === 'Admin' ? 'Admin' : 'Kasir';
+        document.getElementById('headerRole').textContent = roleLabel;
+
+        // Start clock with format: "4/9/2026, 10:32:46 | Kasir: steven"
+        BeeMart.startRealtimeClock('realtimeClock', `${roleLabel}: ${currentUser.username}`);
+
+        // Load next invoice number
+        await refreshInvoiceNumber();
+
+        // Load payment methods
+        await loadPaymentMethods();
+
+        // Load existing cart if any
+        cart = BeeMart.getCart();
+        renderCart();
+
+        // Initial search to display products
+        executeProductSearch('');
+    });
+
+    async function refreshInvoiceNumber() {
+        if (!currentUser) return;
+        const res = await BeeMart.fetchApi(`/api/v1/transactions/next-invoice?userId=${encodeURIComponent(currentUser.idUser)}`);
+        if (res.ok && res.data && res.data.success) {
+            document.getElementById('invoiceNo').value = res.data.data.invoiceNo;
+        }
+    }
+
+    async function loadPaymentMethods() {
+        const select = document.getElementById('paymentMethodSelect');
+        const res = await BeeMart.fetchApi('/api/v1/payment-methods');
+        if (res.ok && res.data && res.data.success) {
+            select.innerHTML = '<option value="">-- Pilih Metode Pembayaran --</option>';
+            res.data.data.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.idPaymentMethod;
+                opt.textContent = m.methodName;
+                select.appendChild(opt);
+            });
+        }
+    }
+
+    async function executeProductSearch(customQuery) {
+        const input = document.getElementById('searchProductInput');
+        const query = (typeof customQuery === 'string') ? customQuery : input.value.trim();
+
+        const tbody = document.getElementById('productsTableBody');
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">Mencari barang...</td></tr>`;
+
+        const res = await BeeMart.fetchApi(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
+        if (res.ok && res.data && res.data.success) {
+            const products = res.data.data;
+            if (products.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 1.5rem; color: var(--text-muted);">Tidak ada barang yang cocok dengan pencarian "${query}".</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            products.forEach(p => {
+                const tr = document.createElement('tr');
+                const discBadge = p.discount > 0 ? `<span class="badge badge-discount">-${p.discount}%</span>` : `<span style="color: #94a3b8;">-</span>`;
+                const finalPrice = p.discount > 0 ? `<span style="text-decoration: line-through; font-size: 0.8rem; color: #94a3b8;">${BeeMart.formatRupiah(p.price)}</span><br/><strong>${BeeMart.formatRupiah(p.finalUnitPrice)}</strong>` : `<strong>${BeeMart.formatRupiah(p.price)}</strong>`;
+
+                tr.innerHTML = `
+                    <td><strong>${escapeHtml(p.name)}</strong></td>
+                    <td>${escapeHtml(p.weightFormatted)}</td>
+                    <td><span class="badge badge-stock">${p.stock}</span></td>
+                    <td>${finalPrice}</td>
+                    <td>${discBadge}</td>
+                    <td style="text-align: center;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick='openProductModal(${JSON.stringify(p)})'>
+                            Pilih
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 1.5rem; color: var(--danger);">Gagal memuat barang.</td></tr>`;
+        }
+    }
+
+    function openProductModal(product) {
+        currentSelectedProduct = product;
+        document.getElementById('modalProductName').textContent = product.name;
+        document.getElementById('modalProductPrice').textContent = BeeMart.formatRupiah(product.price);
+        document.getElementById('modalProductDiscount').textContent = product.discount > 0 ? `Diskon: ${product.discount}% (Harga: ${BeeMart.formatRupiah(product.finalUnitPrice)})` : '';
+        document.getElementById('modalProductStock').textContent = `${product.stock} pcs`;
+
+        const qtyInput = document.getElementById('modalProductQty');
+        qtyInput.value = 1;
+        qtyInput.max = product.stock;
+
+        document.getElementById('modalStockError').style.display = 'none';
+
+        const modal = document.getElementById('productModal');
+        modal.classList.add('show');
+        setTimeout(() => qtyInput.focus(), 100);
+    }
+
+    function closeProductModal() {
+        const modal = document.getElementById('productModal');
+        modal.classList.remove('show');
+        currentSelectedProduct = null;
+    }
+
+    function validateModalQty() {
+        if (!currentSelectedProduct) return false;
+        const qty = parseInt(document.getElementById('modalProductQty').value, 10) || 0;
+        const errorBox = document.getElementById('modalStockError');
+
+        // Check if item already in cart to check total requested qty
+        const existingInCart = cart.find(c => c.idProduct === currentSelectedProduct.idProduct);
+        const alreadyInCartQty = existingInCart ? existingInCart.qty : 0;
+        const totalRequested = qty + alreadyInCartQty;
+
+        if (qty > currentSelectedProduct.stock || totalRequested > currentSelectedProduct.stock) {
+            errorBox.textContent = 'Jumlah barang yang dimasukkan melebihi sisa stok.';
+            errorBox.style.display = 'flex';
+            return false;
+        } else {
+            errorBox.style.display = 'none';
+            return true;
+        }
+    }
+
+    function addToCartFromModal() {
+        if (!currentSelectedProduct) return;
+        const qty = parseInt(document.getElementById('modalProductQty').value, 10);
+        if (!qty || qty <= 0) {
+            BeeMart.showToast('Masukkan jumlah qty yang valid.', 'warning');
+            return;
+        }
+
+        const isValid = validateModalQty();
+        if (!isValid) {
+            return;
+        }
+
+        const existingIndex = cart.findIndex(c => c.idProduct === currentSelectedProduct.idProduct);
+        if (existingIndex >= 0) {
+            cart[existingIndex].qty += qty;
+            cart[existingIndex].subtotal = Math.round(cart[existingIndex].finalUnitPrice * cart[existingIndex].qty);
+        } else {
+            const unitPrice = currentSelectedProduct.price;
+            const discount = currentSelectedProduct.discount;
+            const finalUnitPrice = currentSelectedProduct.finalUnitPrice;
+            const subtotal = Math.round(finalUnitPrice * qty);
+
+            cart.push({
+                idProduct: currentSelectedProduct.idProduct,
+                name: currentSelectedProduct.name,
+                price: unitPrice,
+                discount: discount,
+                finalUnitPrice: finalUnitPrice,
+                qty: qty,
+                subtotal: subtotal,
+                maxStock: currentSelectedProduct.stock
+            });
+        }
+
+        BeeMart.setCart(cart);
+        renderCart();
+        closeProductModal();
+        BeeMart.showToast(`Berhasil menambahkan ${currentSelectedProduct.name} ke keranjang.`, 'success');
+    }
+
+    function removeFromCart(index) {
+        if (index >= 0 && index < cart.length) {
+            const item = cart[index];
+            cart.splice(index, 1);
+            BeeMart.setCart(cart);
+            renderCart();
+            BeeMart.showToast(`${item.name} dihapus dari keranjang.`, 'info');
+        }
+    }
+
+    function renderCart() {
+        const tbody = document.getElementById('cartTableBody');
+        const countBadge = document.getElementById('cartCountBadge');
+        const summaryTotalItems = document.getElementById('summaryTotalItems');
+        const summaryTotalPrice = document.getElementById('summaryTotalPrice');
+
+        if (cart.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Belum ada barang di keranjang belanja.</td></tr>`;
+            countBadge.textContent = '0 Item';
+            summaryTotalItems.textContent = '0';
+            summaryTotalPrice.textContent = 'Rp 0';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        let totalItems = 0;
+        let totalPrice = 0;
+
+        cart.forEach((item, idx) => {
+            totalItems += item.qty;
+            totalPrice += item.subtotal;
+
+            const tr = document.createElement('tr');
+            const discText = item.discount > 0 ? `${item.discount}%` : '-';
+
+            tr.innerHTML = `
+                <td><strong>${escapeHtml(item.name)}</strong></td>
+                <td>${BeeMart.formatRupiah(item.price)}</td>
+                <td><span class="${item.discount > 0 ? 'badge badge-discount' : ''}">${discText}</span></td>
+                <td><strong>${item.qty}</strong></td>
+                <td><strong style="color: #059669;">${BeeMart.formatRupiah(item.subtotal)}</strong></td>
+                <td style="text-align: center;">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeFromCart(${idx})" title="Hapus">
+                        Hapus
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        countBadge.textContent = `${cart.length} Jenis (${totalItems} Pcs)`;
+        summaryTotalItems.textContent = totalItems.toString();
+        summaryTotalPrice.textContent = BeeMart.formatRupiah(totalPrice);
+    }
+
+    async function submitTransaction() {
+        if (!currentUser) return;
+
+        if (cart.length === 0) {
+            BeeMart.showToast('Keranjang belanja kosong! Silakan pilih barang terlebih dahulu.', 'warning');
+            return;
+        }
+
+        const paymentMethodSelect = document.getElementById('paymentMethodSelect');
+        const paymentMethodId = parseInt(paymentMethodSelect.value, 10);
+        if (!paymentMethodId) {
+            BeeMart.showToast('Silakan pilih metode pembayaran.', 'warning');
+            paymentMethodSelect.focus();
+            return;
+        }
+
+        const btnSubmit = document.getElementById('btnSubmitTransaction');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<span>⏳</span> Memproses Transaksi...`;
+
+        const payload = {
+            idUser: currentUser.idUser,
+            idPaymentMethod: paymentMethodId,
+            items: cart.map(c => ({
+                idProduct: c.idProduct,
+                qty: c.qty
+            }))
+        };
+
+        const res = await BeeMart.fetchApi('/api/v1/transactions', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = `<span>💳</span> Submit Transaksi`;
+
+        if (res.ok && res.data && res.data.success) {
+            const tx = res.data.data;
+            BeeMart.showToast(`Transaksi berhasil disimpan! No. Invoice: ${tx.invoiceNo}`, 'success');
+
+            // Reset cart
+            cart = [];
+            BeeMart.clearCart();
+            renderCart();
+
+            // Reset payment method
+            paymentMethodSelect.value = '';
+
+            // Generate new Invoice Number
+            await refreshInvoiceNumber();
+
+            // Refresh product search to update stocks
+            await executeProductSearch();
+        } else {
+            const msg = (res.data && res.data.message) ? res.data.message : 'Gagal memproses transaksi.';
+            BeeMart.showToast(msg, 'error');
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+}

@@ -1,0 +1,22 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - BeeMart Point of Sale</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script>
+        window.API_BASE_URL = '@(Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5000")';
+    </script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    @RenderBody()
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

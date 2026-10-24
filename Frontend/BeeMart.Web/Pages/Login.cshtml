@@ -1,0 +1,102 @@
+@page "/Login"
+@model BeeMart.Web.Pages.LoginModel
+@{
+    ViewData["Title"] = "Login";
+}
+
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-logo-badge">🐝</div>
+            <h1 class="auth-title">BeeMart POS</h1>
+            <p class="auth-subtitle">Sistem Kasir Terpadu Binus Point of Sale</p>
+        </div>
+
+        <div id="loginAlert" class="alert alert-danger" style="display: none;">
+            <span id="loginAlertText">Invalid login</span>
+        </div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <input type="text" id="username" class="form-control" placeholder="Masukkan username" required autocomplete="username" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <input type="password" id="password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="roleSelect">Role</label>
+                <select id="roleSelect" class="form-control" required>
+                    <option value="Cashier">Kasir</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+
+            <button type="submit" id="btnLogin" class="btn btn-primary btn-block" style="margin-top: 1.25rem;">
+                Masuk ke Sistem
+            </button>
+        </form>
+
+        <div class="auth-links">
+            <p>Belum punya akun? <a href="/Register">Register</a></p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // If already logged in, redirect to transaction
+        const existing = BeeMart.getUser();
+        if (existing) {
+            window.location.href = '/Transaction';
+        }
+    });
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const alertBox = document.getElementById('loginAlert');
+        const alertText = document.getElementById('loginAlertText');
+        const btnLogin = document.getElementById('btnLogin');
+
+        alertBox.style.display = 'none';
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const role = document.getElementById('roleSelect').value;
+
+        if (!username || !password) {
+            alertText.textContent = 'Invalid login';
+            alertBox.style.display = 'flex';
+            return;
+        }
+
+        btnLogin.disabled = true;
+        btnLogin.textContent = 'Memproses...';
+
+        const res = await BeeMart.fetchApi('/api/v1/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password, role })
+        });
+
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Masuk ke Sistem';
+
+        if (res.ok && res.data && res.data.success) {
+            BeeMart.setUser(res.data.data);
+            BeeMart.showToast('Login berhasil! Mengalihkan...', 'success');
+            setTimeout(() => {
+                window.location.href = '/Transaction';
+            }, 600);
+        } else {
+            const msg = (res.data && res.data.message) ? res.data.message : 'Invalid login';
+            alertText.textContent = msg;
+            alertBox.style.display = 'flex';
+            BeeMart.showToast(msg, 'error');
+        }
+    }
+</script>
+}

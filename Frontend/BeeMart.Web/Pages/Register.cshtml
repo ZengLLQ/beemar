@@ -1,0 +1,108 @@
+@page "/Register"
+@model BeeMart.Web.Pages.RegisterModel
+@{
+    ViewData["Title"] = "Register";
+}
+
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-logo-badge">🐝</div>
+            <h1 class="auth-title">Daftar Akun BeeMart</h1>
+            <p class="auth-subtitle">Registrasi Kasir / Pengguna Baru POS</p>
+        </div>
+
+        <div id="registerAlert" class="alert alert-danger" style="display: none;">
+            <span id="registerAlertText">username has already exists</span>
+        </div>
+
+        <form id="registerForm" onsubmit="handleRegister(event)">
+            <div class="form-group">
+                <label class="form-label" for="regUsername">Username</label>
+                <input type="text" id="regUsername" class="form-control" placeholder="Masukkan username unik" required autocomplete="username" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regFullName">Full Name</label>
+                <input type="text" id="regFullName" class="form-control" placeholder="Masukkan nama lengkap" required />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regPassword">Password</label>
+                <input type="password" id="regPassword" class="form-control" placeholder="Masukkan password" required autocomplete="new-password" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="regRePassword">Re-Password</label>
+                <input type="password" id="regRePassword" class="form-control" placeholder="Ulangi password" required autocomplete="new-password" />
+            </div>
+
+            <button type="submit" id="btnRegister" class="btn btn-primary btn-block" style="margin-top: 1.25rem;">
+                Daftar Sekarang
+            </button>
+        </form>
+
+        <div class="auth-links">
+            <p>Sudah punya akun? <a href="/Login">Login</a></p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    async function handleRegister(e) {
+        e.preventDefault();
+        const alertBox = document.getElementById('registerAlert');
+        const alertText = document.getElementById('registerAlertText');
+        const btnRegister = document.getElementById('btnRegister');
+
+        alertBox.style.display = 'none';
+
+        const username = document.getElementById('regUsername').value.trim();
+        const fullName = document.getElementById('regFullName').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const rePassword = document.getElementById('regRePassword').value;
+
+        if (!username || !fullName || !password || !rePassword) {
+            alertText.textContent = 'Semua field wajib diisi.';
+            alertBox.style.display = 'flex';
+            return;
+        }
+
+        if (password !== rePassword) {
+            alertText.textContent = 'Password and Re-Password do not match.';
+            alertBox.style.display = 'flex';
+            return;
+        }
+
+        btnRegister.disabled = true;
+        btnRegister.textContent = 'Mendaftarkan...';
+
+        const res = await BeeMart.fetchApi('/api/v1/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({
+                username,
+                fullName,
+                password,
+                rePassword,
+                role: 'Cashier'
+            })
+        });
+
+        btnRegister.disabled = false;
+        btnRegister.textContent = 'Daftar Sekarang';
+
+        if (res.ok && res.data && res.data.success) {
+            BeeMart.showToast('Registrasi berhasil! Silakan login dengan akun Anda.', 'success');
+            setTimeout(() => {
+                window.location.href = '/Login';
+            }, 1000);
+        } else {
+            const msg = (res.data && res.data.message) ? res.data.message : 'Registrasi gagal.';
+            alertText.textContent = msg;
+            alertBox.style.display = 'flex';
+            BeeMart.showToast(msg, 'error');
+        }
+    }
+</script>
+}

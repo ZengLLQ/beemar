@@ -1,0 +1,21 @@
+## [Visual Studio / .NET Core]
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+## [IDE files]
+.vs/
+.idea/
+.vscode/
+
+## [OS files]
+.DS_Store
+Thumbs.db

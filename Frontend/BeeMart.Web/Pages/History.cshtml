@@ -1,0 +1,270 @@
+@page "/History"
+@model BeeMart.Web.Pages.HistoryModel
+@{
+    ViewData["Title"] = "History Transaction";
+}
+
+<!-- Top Header with Realtime Clock & User Info -->
+<header class="top-header">
+    <div class="brand-section">
+        <span class="brand-logo">🐝</span>
+        <div>
+            <span class="brand-name">BeeMart</span>
+            <span class="brand-tag">POS SYSTEM</span>
+        </div>
+    </div>
+
+    <div class="header-status">
+        <div id="realtimeClock" class="realtime-clock">
+            Loading time...
+        </div>
+        <div class="user-badge-header">
+            <span>👤</span>
+            Role: <strong id="headerRole">Cashier</strong> | Login: <strong id="headerUsername">-</strong>
+        </div>
+        <button type="button" class="btn-logout" onclick="BeeMart.logout()">
+            <span>🚪</span> Logout
+        </button>
+    </div>
+</header>
+
+<!-- Navigation Tabs -->
+<nav class="nav-tabs-bar">
+    <a href="/Transaction" class="nav-tab-btn">
+        <span>🛒</span> New Transaction
+    </a>
+    <a href="/History" class="nav-tab-btn active">
+        <span>📜</span> History Transaction
+    </a>
+</nav>
+
+<!-- Main Container -->
+<main class="main-wrapper">
+    <div class="card">
+        <div class="card-header-styled">
+            <h2 class="card-title"><span>📜</span> Riwayat Transaksi (History Transaction)</h2>
+            <div id="userBadgeTag" class="badge badge-role">Role: Cashier</div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="history-filter-card">
+            <div style="flex: 1; min-width: 200px;">
+                <label for="filterDate" class="form-label">Filter Tanggal Transaksi <span style="color: var(--danger);">*</span></label>
+                <input type="date" id="filterDate" class="form-control" required />
+            </div>
+            <div>
+                <button type="button" id="btnFilter" class="btn btn-primary" onclick="loadHistory(1)">
+                    <span>🔍</span> Tampilkan Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Sub-Header dynamic based on role -->
+        <div id="historySubHeader" class="history-subheader">
+            Pencarian Data Transaksi
+        </div>
+
+        <!-- History Table -->
+        <div class="table-responsive">
+            <table class="custom-table" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>No. Transaksi</th>
+                        <th>Tanggal & Jam</th>
+                        <th>Kasir</th>
+                        <th style="text-align: center;">Jml Item</th>
+                        <th>Pembayaran</th>
+                        <th style="text-align: right;">Total Harga</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+                            Pilih tanggal transaksi di atas lalu klik "Tampilkan Data".
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination-container" id="paginationContainer" style="display: none;">
+            <div style="font-size: 0.9rem; color: var(--text-muted);">
+                Menampilkan halaman <strong id="lblCurrentPage">1</strong> dari <strong id="lblTotalPages">1</strong> (<span id="lblTotalCount">0</span> total transaksi)
+            </div>
+            <div class="pagination-controls" id="paginationButtons">
+                <!-- Dynamic Page Buttons -->
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<footer class="app-footer">
+    &copy; 2026 BeeMart Point of Sale - IT Division Bootcamp
+</footer>
+
+@section Scripts {
+<script>
+    let currentUser = null;
+    let currentPage = 1;
+    const pageSize = 20;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        currentUser = BeeMart.requireAuth();
+        if (!currentUser) return;
+
+        // Set Header
+        document.getElementById('headerUsername').textContent = currentUser.username;
+        document.getElementById('headerRole').textContent = currentUser.role;
+        document.getElementById('userBadgeTag').textContent = `Role: ${currentUser.role}`;
+
+        // Header Clock
+        BeeMart.startRealtimeClock('realtimeClock', `Role: ${currentUser.role} | Login: ${currentUser.username}`);
+
+        // Set sub-header per requirement:
+        // Cashier: "Pencarian Data Transaksi (Hanya Kasir: <username>)"
+        // Admin: "Pencarian Data Transaksi (Menampilkan Semua Kasir)"
+        const subHeaderEl = document.getElementById('historySubHeader');
+        if (currentUser.role === 'Admin') {
+            subHeaderEl.textContent = 'Pencarian Data Transaksi (Menampilkan Semua Kasir)';
+        } else {
+            subHeaderEl.textContent = `Pencarian Data Transaksi (Hanya Kasir: ${currentUser.username})`;
+        }
+
+        // Set default filter date to today (or 2026-04-09 if demo sample date)
+        const dateInput = document.getElementById('filterDate');
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        dateInput.value = `${year}-${month}-${day}`;
+
+        // Load today's history automatically
+        loadHistory(1);
+    });
+
+    async function loadHistory(page = 1) {
+        if (!currentUser) return;
+
+        const dateInput = document.getElementById('filterDate');
+        const dateVal = dateInput.value;
+        if (!dateVal) {
+            BeeMart.showToast('Filter tanggal transaksi wajib dipilih.', 'warning');
+            dateInput.focus();
+            return;
+        }
+
+        currentPage = page;
+        const btnFilter = document.getElementById('btnFilter');
+        btnFilter.disabled = true;
+        btnFilter.innerHTML = `<span>⏳</span> Memuat...`;
+
+        const tbody = document.getElementById('historyTableBody');
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">Memuat data riwayat transaksi...</td></tr>`;
+
+        // URL query parameters
+        let url = `/api/v1/transactions/history?date=${encodeURIComponent(dateVal)}&role=${encodeURIComponent(currentUser.role)}&page=${page}&pageSize=${pageSize}`;
+        if (currentUser.role !== 'Admin') {
+            url += `&userId=${encodeURIComponent(currentUser.idUser)}`;
+        }
+
+        const res = await BeeMart.fetchApi(url);
+        btnFilter.disabled = false;
+        btnFilter.innerHTML = `<span>🔍</span> Tampilkan Data`;
+
+        if (res.ok && res.data && res.data.success) {
+            const result = res.data.data;
+            renderHistoryTable(result.items);
+            renderPagination(result);
+        } else {
+            const msg = (res.data && res.data.message) ? res.data.message : 'Gagal memuat data transaksi.';
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">${msg}</td></tr>`;
+            document.getElementById('paginationContainer').style.display = 'none';
+        }
+    }
+
+    function renderHistoryTable(items) {
+        const tbody = document.getElementById('historyTableBody');
+        if (!items || items.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">Tidak ada transaksi pada tanggal yang dipilih.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = '';
+        items.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong style="font-family: monospace; letter-spacing: 0.5px;">${escapeHtml(t.invoiceNo)}</strong></td>
+                <td>${BeeMart.formatDateTime(t.transactionDate)}</td>
+                <td><span class="badge badge-stock">${escapeHtml(t.cashierUsername)}</span></td>
+                <td style="text-align: center;"><strong>${t.totalItems}</strong></td>
+                <td><span class="badge badge-success">${escapeHtml(t.paymentMethodName)}</span></td>
+                <td style="text-align: right;"><strong style="color: #059669; font-size: 0.95rem;">${BeeMart.formatRupiah(t.totalPrice)}</strong></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderPagination(pageData) {
+        const container = document.getElementById('paginationContainer');
+        const btnContainer = document.getElementById('paginationButtons');
+
+        if (!pageData || pageData.totalCount === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'flex';
+        document.getElementById('lblCurrentPage').textContent = pageData.pageNumber;
+        document.getElementById('lblTotalPages').textContent = Math.max(pageData.totalPages, 1);
+        document.getElementById('lblTotalCount').textContent = pageData.totalCount;
+
+        btnContainer.innerHTML = '';
+
+        // Previous button
+        const btnPrev = document.createElement('button');
+        btnPrev.type = 'button';
+        btnPrev.className = 'page-btn';
+        btnPrev.innerHTML = '&laquo; Prev';
+        btnPrev.disabled = !pageData.hasPreviousPage;
+        btnPrev.onclick = () => loadHistory(pageData.pageNumber - 1);
+        btnContainer.appendChild(btnPrev);
+
+        // Page buttons (display up to 5)
+        const totalPages = pageData.totalPages;
+        const current = pageData.pageNumber;
+        let startPage = Math.max(1, current - 2);
+        let endPage = Math.min(totalPages, startPage + 4);
+
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        for (let p = startPage; p <= endPage; p++) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `page-btn ${p === current ? 'active' : ''}`;
+            btn.textContent = p;
+            btn.onclick = () => loadHistory(p);
+            btnContainer.appendChild(btn);
+        }
+
+        // Next button
+        const btnNext = document.createElement('button');
+        btnNext.type = 'button';
+        btnNext.className = 'page-btn';
+        btnNext.innerHTML = 'Next &raquo;';
+        btnNext.disabled = !pageData.hasNextPage;
+        btnNext.onclick = () => loadHistory(pageData.pageNumber + 1);
+        btnContainer.appendChild(btnNext);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+}
